@@ -1,51 +1,59 @@
-name: TikTok Downloader
+name: TikTok to Catbox
 
 on:
   workflow_dispatch:
     inputs:
       tiktok_url:
-        description: 'Masukkan URL Video TikTok'
+        description: 'Tempel Link Video TikTok di Sini'
         required: true
-        default: 'https://vt.tiktok.com/ZSuHgjwQd/'
+        default: ''
 
 jobs:
-  download-tiktok:
+  download-and-upload:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Python and yt-dlp
+      - name: Install yt-dlp
         run: |
           sudo python3 -m pip install --upgrade yt-dlp
 
-      - name: Download TikTok Video
+      - name: Download TikTok Video (No Watermark)
         id: download
         run: |
-          # Mengunduh video dengan format terbaik (biasanya no watermark secara default di yt-dlp)
-          yt-dlp -o "tiktok_video.mp4" "${{ github.event.inputs.tiktok_url }}"
-          echo "FILENAME=tiktok_video.mp4" >> $GITHUB_ENV
+          # Mengunduh video dengan nama file 'video.mp4'
+          yt-dlp -o "video.mp4" "${{ github.event.inputs.tiktok_url }}"
+          echo "FILENAME=video.mp4" >> $GITHUB_ENV
 
-      - name: Upload to Transfer.sh (Get Download Link)
+      - name: Upload to Catbox.moe
+        id: upload
         run: |
-          echo "--- MENGUNGGAH VIDEO ---"
-          # Mengunggah ke transfer.sh dan menyimpan URL-nya
-          DOWNLOAD_URL=$(curl --upload-file ./tiktok_video.mp4 https://transfer.sh/tiktok_video.mp4)
-          echo "HASIL_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
+          echo "--- MENGUNGGAH KE CATBOX ---"
+          # Mengirim file ke API Catbox
+          # Catbox akan langsung merespon dengan URL file dalam bentuk teks biasa
+          CATBOX_URL=$(curl -F "reqtype=fileupload" -F "fileToUpload=@video.mp4" https://catbox.moe/user/api.php)
           
-          # Simpan ke log.txt seperti permintaan sebelumnya
-          echo "URL Download: $DOWNLOAD_URL" > log.txt
-          echo "Waktu: $(date)" >> log.txt
+          echo "HASIL_URL=$CATBOX_URL" >> $GITHUB_ENV
+          
+          # Simpan hasil ke log.txt (Sesuai permintaan awalmu)
+          echo "Hasil Download TikTok Tanpa Watermark" > log.txt
+          echo "-------------------------------------" >> log.txt
+          echo "URL TikTok: ${{ github.event.inputs.tiktok_url }}" >> log.txt
+          echo "URL Download (Catbox): $CATBOX_URL" >> log.txt
+          echo "Waktu Selesai: $(date)" >> log.txt
 
       - name: Show Download Link in Summary
         run: |
-          echo "### 🚀 Download Selesai!" >> $GITHUB_STEP_SUMMARY
-          echo "Video kamu sudah siap. Klik link di bawah ini untuk mengunduh:" >> $GITHUB_STEP_SUMMARY
-          echo "- **URL:** ${{ env.HASIL_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Video Berhasil Diambil!" >> $GITHUB_STEP_SUMMARY
+          echo "Klik link di bawah ini untuk melihat/mengunduh video:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Link:** ${{ env.HASIL_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> File ini tersimpan di Catbox.moe dan bisa kamu akses kapan saja." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload log.txt as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tiktok-log
+          name: download-log
           path: log.txt
