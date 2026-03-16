@@ -1,60 +1,59 @@
 name: Ollama Terminal Action
 
 on:
-  # Memungkinkan kamu mengetik prompt langsung di dashboard GitHub
   workflow_dispatch:
     inputs:
       user_prompt:
-        description: 'Tulis pertanyaanmu untuk AI di sini'
+        description: 'Tulis pertanyaanmu di sini'
         required: true
-        default: 'Siapakah itu jule trulala?'
+        default: 'Halo AI, apa kabar?'
+
+# PENTING: Memberikan izin agar bot bisa menulis file ke repository
+permissions:
+  contents: write
 
 jobs:
   run-ai:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Izin agar bot bisa simpan jawaban ke file
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Ambil histori penuh agar tidak error saat push
 
       - name: Install Ollama
         run: |
-          # Install Ollama secara resmi
           curl -fsSL https://ollama.com/install.sh | sh
 
       - name: Start Ollama & Run Model
         run: |
-          # Jalankan server di background
+          # Jalankan server
           ollama serve & 
           
-          # Tunggu sampai server siap
-          echo "Sedang menyiapkan Ollama..."
+          # Tunggu server siap
           until curl -s localhost:11434/api/tags > /dev/null; do
+            echo "Menunggu Ollama..."
             sleep 2
           done
           
-          # Ambil input dari user dan jalankan TinyLlama (Ringan & Cepat)
+          # Jalankan AI dan simpan ke file sementara
           PROMPT="${{ github.event.inputs.user_prompt }}"
-          echo "--- PERTANYAAN ---"
-          echo "$PROMPT"
-          echo "------------------"
-          
-          # Jalankan AI dan tampilkan hasilnya di log Terminal GitHub
-          ollama run tinyllama "$PROMPT" | tee ai_answer.txt
-          
-          echo "------------------"
-          echo "Proses Selesai!"
+          ollama run tinyllama "$PROMPT" > ai_answer.txt
 
-      - name: Save Result to Repository
+      - name: Create or Update LOG_CHAT.md
         run: |
-          git config --global user.name "AI-Bot"
-          git config --global user.email "ai-bot@github.com"
+          # Ambil konten jawaban
+          ANSWER=$(cat ai_answer.txt)
+          DATE=$(date '+%Y-%m-%d %H:%M:%S')
           
-          # Simpan jawaban ke file LOG_CHAT.md agar bisa dibaca di repo
-          echo -e "\n### User: ${{ github.event.inputs.user_prompt }}\n**AI:** $(cat ai_answer.txt)\n" >> LOG_CHAT.md
-          
+          # Tambahkan ke file LOG_CHAT.md (membuat baru jika belum ada)
+          echo -e "## Chat pada $DATE\n\n**User:** ${{ github.event.inputs.user_prompt }}\n\n**AI:** $ANSWER\n\n---\n" >> LOG_CHAT.md
+
+      - name: Push to Repository
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add LOG_CHAT.md
-          git commit -m "AI: Menjawab pertanyaan baru" || exit 0
+          git commit -m "AI: Menambahkan jawaban ke log" || exit 0
           git push
