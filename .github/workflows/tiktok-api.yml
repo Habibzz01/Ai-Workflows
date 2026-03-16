@@ -1,0 +1,83 @@
+name: TikTok Master API
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL TikTok (Video/Profile)'
+        required: true
+      mode:
+        description: 'Mode: video, audio, profile'
+        required: true
+        default: 'video'
+
+jobs:
+  process-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        run: |
+          sudo python3 -m pip install --upgrade yt-dlp
+          sudo apt-get install jq -y
+
+      - name: Execute Task
+        id: task
+        run: |
+          URL="${{ github.event.inputs.url }}"
+          MODE="${{ github.event.inputs.mode }}"
+          
+          echo "Processing $MODE for $URL..."
+
+          if [ "$MODE" == "video" ]; then
+            # Download Video No Watermark
+            yt-dlp -o "output.mp4" "$URL"
+            RESULT_URL=$(curl -F "reqtype=fileupload" -F "fileToUpload=@output.mp4" https://catbox.moe/user/api.php)
+            echo "FINAL_RESULT=$RESULT_URL" >> $GITHUB_ENV
+            echo "TYPE=video" >> $GITHUB_ENV
+
+          elif [ "$MODE" == "audio" ]; then
+            # Download Audio Only (MP3)
+            yt-dlp -x --audio-format mp3 -o "output.mp3" "$URL"
+            RESULT_URL=$(curl -F "reqtype=fileupload" -F "fileToUpload=@output.mp3" https://catbox.moe/user/api.php)
+            echo "FINAL_RESULT=$RESULT_URL" >> $GITHUB_ENV
+            echo "TYPE=audio" >> $GITHUB_ENV
+
+          elif [ "$MODE" == "profile" ]; then
+            # Get Profile Metadata (JSON)
+            # Mengambil info user via yt-dlp metadata
+            yt-dlp --dump-json "$URL" > profile.json
+            # Ekstrak info penting pakai jq
+            USER_INFO=$(jq -c '{uploader: .uploader, uploader_id: .uploader_id, description: .description, profile_pic: .thumbnail}' profile.json)
+            echo "USER_DATA=$USER_INFO" >> $GITHUB_ENV
+            echo "TYPE=profile" >> $GITHUB_ENV
+          fi
+
+      - name: Generate JSON Response & Save Log
+        run: |
+          if [ "${{ env.TYPE }}" == "profile" ]; then
+            echo '{"status": "success", "type": "profile", "data": ${{ env.USER_DATA }}}' > log.json
+          else
+            echo '{"status": "success", "type": "${{ env.TYPE }}", "download_url": "${{ env.FINAL_RESULT }}"}' > log.json
+          fi
+          
+          # Catat ke log.txt sesuai permintaanmu
+          cat log.json > log.txt
+          echo "--- Selesai pada $(date) ---" >> log.txt
+
+      - name: API Response Summary
+        run: |
+          echo "### 🌐 API Response" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat log.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-response
+          path: |
+            log.txt
+            log.json
