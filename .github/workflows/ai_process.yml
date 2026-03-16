@@ -1,0 +1,29 @@
+name: Ollama Processor
+on: [repository_dispatch, push]
+
+jobs:
+  ai-chat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Ollama
+        run: |
+          curl -L https://ollama.com/download/ollama-linux-amd64 -o ollama
+          chmod +x ollama
+          ./ollama serve & 
+          sleep 5
+          ./ollama run tinyllama "Jawab singkat: Apa itu GitHub?" > response.txt
+
+      - name: Update Chat History
+        run: |
+          RESPONSE=$(cat response.txt)
+          echo "{\"last_response\": \"$RESPONSE\"}" > chat_history.json
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "AI-Bot"
+          git config --global user.email "bot@github.com"
+          git add chat_history.json
+          git commit -m "AI Update Response"
+          git push
