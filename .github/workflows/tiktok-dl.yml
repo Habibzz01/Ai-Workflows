@@ -1,0 +1,51 @@
+name: TikTok Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      tiktok_url:
+        description: 'Masukkan URL Video TikTok'
+        required: true
+        default: 'https://vt.tiktok.com/ZSuHgjwQd/'
+
+jobs:
+  download-tiktok:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Python and yt-dlp
+        run: |
+          sudo python3 -m pip install --upgrade yt-dlp
+
+      - name: Download TikTok Video
+        id: download
+        run: |
+          # Mengunduh video dengan format terbaik (biasanya no watermark secara default di yt-dlp)
+          yt-dlp -o "tiktok_video.mp4" "${{ github.event.inputs.tiktok_url }}"
+          echo "FILENAME=tiktok_video.mp4" >> $GITHUB_ENV
+
+      - name: Upload to Transfer.sh (Get Download Link)
+        run: |
+          echo "--- MENGUNGGAH VIDEO ---"
+          # Mengunggah ke transfer.sh dan menyimpan URL-nya
+          DOWNLOAD_URL=$(curl --upload-file ./tiktok_video.mp4 https://transfer.sh/tiktok_video.mp4)
+          echo "HASIL_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
+          
+          # Simpan ke log.txt seperti permintaan sebelumnya
+          echo "URL Download: $DOWNLOAD_URL" > log.txt
+          echo "Waktu: $(date)" >> log.txt
+
+      - name: Show Download Link in Summary
+        run: |
+          echo "### 🚀 Download Selesai!" >> $GITHUB_STEP_SUMMARY
+          echo "Video kamu sudah siap. Klik link di bawah ini untuk mengunduh:" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** ${{ env.HASIL_URL }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload log.txt as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiktok-log
+          path: log.txt
