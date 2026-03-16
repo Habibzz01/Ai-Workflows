@@ -1,0 +1,19 @@
+<div id="chat-box"></div>
+<input type="text" id="user-input" placeholder="Tanya sesuatu...">
+<button onclick="sendChat()">Kirim</button>
+
+<script>
+  async function sendChat() {
+    const msg = document.getElementById('user-input').value;
+    // Di sini kita akan menggunakan GitHub API untuk memicu workflow
+    // atau sekadar melakukan commit perubahan ke file JSON
+    alert("Pesan dikirim! Tunggu ~30 detik untuk proses GitHub Action.");
+  }
+
+  // Fungsi untuk polling hasil
+  setInterval(async () => {
+    const res = await fetch('chat_history.json');
+    const data = await res.json();
+    document.getElementById('chat-box').innerText = data.last_response;
+  }, 5000);
+</script>
