@@ -1,29 +1,70 @@
-name: Ollama Processor
-on: [repository_dispatch, push]
+name: Ollama AI Processor
+
+on:
+  # Memungkinkan trigger dari Website (via GitHub API)
+  repository_dispatch:
+    types: [chat_event]
+  # Memungkinkan trigger manual dari tab "Actions" di GitHub
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Pesan untuk AI'
+        required: true
+        default: 'Halo, apa kabar?'
 
 jobs:
-  ai-chat:
+  process-ai:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Wajib agar bot bisa push hasil chat ke repo
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Install Ollama
         run: |
-          curl -L https://ollama.com/download/ollama-linux-amd64 -o ollama
-          chmod +x ollama
-          ./ollama serve & 
-          sleep 5
-          ./ollama run tinyllama "Jawab singkat: Apa itu GitHub?" > response.txt
+          # Menggunakan script resmi agar instalasi sempurna
+          curl -fsSL https://ollama.com/install.sh | sh
 
-      - name: Update Chat History
+      - name: Run Ollama Server & Model
         run: |
-          RESPONSE=$(cat response.txt)
-          echo "{\"last_response\": \"$RESPONSE\"}" > chat_history.json
+          # Jalankan server di background
+          ollama serve & 
+          
+          # Tunggu hingga port 11434 aktif
+          echo "Menunggu Ollama server siap..."
+          until curl -s localhost:11434/api/tags > /dev/null; do
+            sleep 2
+          done
+          
+          # Ambil prompt dari API (website) atau manual input
+          USER_PROMPT="${{ github.event.client_payload.prompt || github.event.inputs.prompt }}"
+          echo "User bertanya: $USER_PROMPT"
+          
+          # Jalankan model (Gunakan TinyLlama agar cepat di CPU GitHub)
+          # Kita simpan hasilnya ke file sementara
+          ollama run tinyllama "$USER_PROMPT" > ai_response.txt
 
-      - name: Commit and Push
+      - name: Update Chat History JSON
         run: |
-          git config --global user.name "AI-Bot"
-          git config --global user.email "bot@github.com"
+          # Mengambil isi response dan membersihkan karakter aneh
+          RESPONSE_TEXT=$(cat ai_response.txt | tr -d '\r')
+          USER_PROMPT="${{ github.event.client_payload.prompt || github.event.inputs.prompt }}"
+          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+          
+          # Membuat file JSON yang akan dibaca oleh website statis kamu
+          echo "{
+            \"last_update\": \"$TIMESTAMP\",
+            \"prompt\": \"$USER_PROMPT\",
+            \"response\": \"$RESPONSE_TEXT\"
+          }" > chat_history.json
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "GitHub Action Bot"
+          git config --global user.email "actions@github.com"
           git add chat_history.json
-          git commit -m "AI Update Response"
+          # Hanya commit jika ada perubahan
+          git commit -m "AI: Menjawab pertanyaan dari user" || exit 0
           git push
