@@ -1,59 +1,44 @@
-name: Ollama Terminal Action
+name: Ollama Automation
 
 on:
-  workflow_dispatch:
-    inputs:
-      user_prompt:
-        description: 'Tulis pertanyaanmu di sini'
-        required: true
-        default: 'Halo AI, apa kabar?'
-
-# PENTING: Memberikan izin agar bot bisa menulis file ke repository
-permissions:
-  contents: write
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Memungkinkan kamu menjalankan manual dari tab Actions
 
 jobs:
-  run-ai:
+  ollama-task:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Ambil histori penuh agar tidak error saat push
 
       - name: Install Ollama
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
 
-      - name: Start Ollama & Run Model
+      - name: Start Ollama Server
         run: |
-          # Jalankan server
+          # Jalankan server di background
           ollama serve & 
-          
-          # Tunggu server siap
-          until curl -s localhost:11434/api/tags > /dev/null; do
-            echo "Menunggu Ollama..."
-            sleep 2
-          done
-          
-          # Jalankan AI dan simpan ke file sementara
-          PROMPT="${{ github.event.inputs.user_prompt }}"
-          ollama run tinyllama "$PROMPT" > ai_answer.txt
+          # Tunggu sebentar sampai server siap
+          sleep 10 
 
-      - name: Create or Update LOG_CHAT.md
+      - name: Pull Model and Run Query
         run: |
-          # Ambil konten jawaban
-          ANSWER=$(cat ai_answer.txt)
-          DATE=$(date '+%Y-%m-%d %H:%M:%S')
+          # Menggunakan tinyllama agar cepat dan ringan di CPU
+          ollama pull tinyllama
           
-          # Tambahkan ke file LOG_CHAT.md (membuat baru jika belum ada)
-          echo -e "## Chat pada $DATE\n\n**User:** ${{ github.event.inputs.user_prompt }}\n\n**AI:** $ANSWER\n\n---\n" >> LOG_CHAT.md
+          echo "--- Pertanyaan: Apa itu GitHub Actions? ---" > log.txt
+          ollama run tinyllama "Jelaskan apa itu GitHub Actions secara singkat dalam Bahasa Indonesia" >> log.txt
+          
+          echo -e "\n--- Selesai pada: $(date) ---" >> log.txt
 
-      - name: Push to Repository
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add LOG_CHAT.md
-          git commit -m "AI: Menambahkan jawaban ke log" || exit 0
-          git push
+      - name: Show Result in Logs
+        run: cat log.txt
+
+      - name: Upload log.txt as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ollama-output-log
+          path: log.txt
