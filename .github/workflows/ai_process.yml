@@ -27,10 +27,10 @@ jobs:
       - name: Pull Model and Run Query
         run: |
           # Menggunakan tinyllama agar cepat dan ringan di CPU
-          ollama pull tinyllama
+          ollama pull qwen3
           
           echo "--- Pertanyaan: Apa itu GitHub Actions? ---" > log.txt
-          ollama run tinyllama "Jelaskan apa itu GitHub Actions secara singkat dalam Bahasa Indonesia" >> log.txt
+          ollama run qwen3 "Jelaskan apa itu GitHub Actions secara singkat dalam Bahasa Indonesia" >> log.txt
           
           echo -e "\n--- Selesai pada: $(date) ---" >> log.txt
 
